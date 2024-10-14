@@ -1,3 +1,4 @@
+// ./models/asinCatalogMapping.js
 const db = require("../config/mongoDbConfig");
 const { Schema } = require("mongoose");
 
@@ -33,6 +34,7 @@ const asinCatalogSchema = new Schema(
     mlShippingCostsUpdatedAt: { type: Date, default: null },  
     estimatedProfit: { type: Number, default: 0 },
     isMatchCorrect: { type: Boolean, default: true },
+    tracking:  { type: Boolean, default: false }
   },
   {
     timestamps: true,

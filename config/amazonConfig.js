@@ -1,3 +1,4 @@
+// ./config/amazonConfig.js
 const SellingPartner = require('amazon-sp-api');
 require("dotenv").config();
 

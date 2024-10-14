@@ -23,7 +23,6 @@ const getAsinPrice = async (asin) => {
     };
 
     const results = await spClient.callAPI(params);
-   // console.log(JSON.stringify(results, null, 2));
     return results;
   } catch (error) {
     console.log(error);
@@ -77,10 +76,6 @@ const getAsinDetails = async (asin) => {
     return { uniqueIdentifiers: [], title: "Sin título", image: null };
   }
 };
-
-
-
-
 
 
 module.exports = {

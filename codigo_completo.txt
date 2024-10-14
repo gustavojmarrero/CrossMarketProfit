@@ -1,4 +1,436 @@
-// ./controllers/catalogController.js
+// ./config/keepaConfig.js
+const axios = require("axios").default;
+require("dotenv").config();
+
+const keepaClient = axios.create({
+    baseURL: 'https://api.keepa.com/',
+    timeout: 10000 // puedes configurar un tiempo límite si lo deseas
+});
+
+const keepaApiKey = process.env.KEEPA_API_KEY;
+
+// Función unificada para realizar llamadas a la API de Keepa
+const callKeepaAPI = async (endpoint, params = {}) => {
+    try {
+        const response = await keepaClient.get(endpoint, {
+            params: { ...params, key: keepaApiKey } // Agregar la API key a los parámetros
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error al realizar la consulta a la API de Keepa en ${endpoint}:`, error);
+        throw error; // Lanzar error para manejo externo si es necesario
+    }
+};
+
+
+
+module.exports = {
+    callKeepaAPI
+};
+// ./config/meliConfig.js
+const axios = require("axios").default;
+const setupQueue = require('./setupQueque'); // Importa la función que configura la cola
+const credentials = require('../models/meliCredentials');
+
+const getAccessTokenFromDB = async () => {
+    const {access_token} = await credentials.findOne({}).exec();
+    return access_token;
+}
+
+let queue;
+
+const initQueue = async () => {
+    if (!queue) {
+        queue = await setupQueue(); // Inicializa la cola solo si no está ya inicializada
+    }
+};
+
+const meliRequest = async (endpoint, method = 'GET', data = null, config = {}) => {
+    // Actualiza el contador de llamadas
+
+    
+    await initQueue(); // Asegura que la cola esté inicializada antes de usarla
+    const accessToken = await getAccessTokenFromDB();
+    try {
+        const response = await queue.add(() => 
+            axios({
+                url: `https://api.mercadolibre.com/${endpoint}`,
+                method: method,
+                data: data,
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    ...config.headers
+                },
+                ...config
+            })
+        );
+        return { success: true, data: response.data };
+    } catch (error) {
+        if (error.response?.status === 429) {
+            console.log(`Info: Too many requests for ${endpoint}`);
+            return { success: false, error: 'Too many requests' };
+        }
+
+        if (error.response?.data?.message === 'No winners found') {
+            console.log(`Info: No winners found for ${endpoint}`);
+            return { success: false, error: 'No winners found' };
+        } else {
+          //  console.error(`Error al hacer la solicitud a MercadoLibre con el método ${method}:`, error);
+            return { success: false, error: error.response?.data?.message || error.message };
+        }
+    }
+};
+
+module.exports = { meliRequest };// ./config/googleSheetsConfig.js
+const { google } = require('googleapis');
+require('dotenv').config();
+
+const authenticate = async () => {
+  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  const auth = new google.auth.GoogleAuth({
+    credentials: credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+  });
+  return auth;
+};
+
+const sheets = async () => {
+  const auth = await authenticate();
+  return google.sheets({ version: 'v4', auth });
+};
+
+const readSheet = async (spreadsheetId, range) => {    
+  const gsheets = await sheets();
+  const result = await gsheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+    valueRenderOption: 'UNFORMATTED_VALUE'
+  });
+  return result.data.values;
+};
+
+const updateSheet = async (spreadsheetId, range, values) => {
+  const gsheets = await sheets();
+  const result = await gsheets.spreadsheets.values.append({
+    spreadsheetId,
+    range,
+    valueInputOption: 'USER_ENTERED',
+    resource: { values },
+  });
+  return result.data;
+};
+
+const clearSheet = async (spreadsheetId, range) => {
+  try {
+    const gsheets = await sheets();
+    const result = await gsheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range
+    });
+    return result.data;
+  } catch (error) {
+    console.error('Error al borrar los valores:', error);
+    throw error;
+  }
+};
+
+
+module.exports = {
+  readSheet,
+  updateSheet,
+  clearSheet,
+};// ./config/mongoDbConfig.js
+require('dotenv').config();
+
+const mongoose = require('mongoose');
+
+// Obtenemos la URI de MongoDB
+const mongoURI = `${process.env.URI_BD_GUATEVER}?maxPoolSize=5`; 
+
+
+
+// Conectamos a MongoDB
+mongoose.connect(mongoURI);
+mongoose.set('strictQuery', false);
+
+// Escuchamos evento de conexión
+mongoose.connection.once('open', () => {
+  console.log('Conectado a MongoDB');
+});
+
+// Escuchamos errores
+mongoose.connection.on('error', err => {
+  console.error(err);
+});
+
+// Exportamos la conexión
+module.exports = mongoose.connection;
+// ./config/setupQueque.js
+async function setupQueue() {
+    const PQueue = (await import('p-queue')).default;
+    const queue = new PQueue({ concurrency: 4, interval: 500, intervalCap: 2 });
+    return queue;
+}
+
+module.exports = setupQueue;// ./config/amazonConfig.js
+const SellingPartner = require('amazon-sp-api');
+require("dotenv").config();
+
+const spClient = new SellingPartner({
+    region: 'na', 
+    refresh_token: process.env.AMAZON_REFRESH_TOKEN 
+});
+
+
+module.exports = spClient;// ./utils/index.js
+const fs = require('fs');
+const path = require('path');
+const moment = require('moment');
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000;
+
+const isValidUPC = (upc) =>{
+    if (typeof upc !== 'string') {
+        console.log('El UPC debe ser una cadena de texto.');
+        return false;
+    }
+    // Para UPC-A (12 dígitos) o EAN-13 (13 dígitos)
+    if (upc.length !== 12 && upc.length !== 13) {
+        console.log('El UPC debe tener 12 o 13 dígitos.');
+        return false;
+    }
+    return true;
+}
+
+const chunkArray = (arr, chunkSize) => {
+    let result = [];
+    for (let i = 0; i < arr.length; i += chunkSize) {
+        result.push(arr.slice(i, i + chunkSize));
+    }
+    return result;
+};
+
+const formatNumber =(n)=> {
+    // format number 1000000 to 1,234,567
+    return n.replace(/\D/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  const formatCurrency = (input, currency, blur)=>{
+    // appends $ to value, validates decimal side
+    // and puts cursor back in right position.
+    // get input value
+    var input_val = input.value;
+    // don't validate empty input
+    if (input_val === "") {
+      return;
+    }
+
+    // original length
+    var original_len = input_val.length;
+
+    // initial caret position
+    var caret_pos = input.selectionStart;
+
+    // check for decimal
+    if (input_val.indexOf(".") >= 0) {
+      // get position of first decimal
+      // this prevents multiple decimals from
+      // being entered
+      var decimal_pos = input_val.indexOf(".");
+
+      // split number by decimal point
+      var left_side = input_val.substring(0, decimal_pos);
+      var right_side = input_val.substring(decimal_pos);
+
+      // add commas to left side of number
+      left_side = formatNumber(left_side);
+
+      // validate right side
+      right_side = formatNumber(right_side);
+
+      // On blur make sure 2 numbers after decimal
+      if (blur === "blur") {
+        right_side += "00";
+      }
+
+      // Limit decimal to only 2 digits
+      right_side = right_side.substring(0, 2);
+
+      // join number by .
+      input_val = currency + left_side + "." + right_side;
+    } else {
+      // no decimal entered
+      // add commas to number
+      // remove all non-digits
+      input_val = formatNumber(input_val);
+      input_val = currency + input_val;
+
+      // final formatting
+      if (blur === "blur") {
+        input_val += ".00";
+      }
+    }
+
+    // send updated string to input
+    input.value = input_val;
+
+    // put caret back in the right position
+    var updated_len = input_val.length;
+    caret_pos = updated_len - original_len + caret_pos;
+    input.setSelectionRange(caret_pos, caret_pos);
+  }
+  const retryOnFail = async (
+    func,
+    maxRetries = 5,
+    initialDelay = 20000
+  ) => {
+    let delay = initialDelay;
+  
+    for (let i = 0; i < maxRetries; i++) {
+      console.log(`Retrying ${i + 1} of ${maxRetries}...`);
+      const result = await func();
+  
+      if (result.success) {
+        return result;
+      } else if (result.error === 'Too many requests' || result.error === 'too_many_requests') {
+        console.log('Received 429 Too Many Requests, waiting before retrying...');
+        await new Promise((res) => setTimeout(res, delay));
+        delay *= 2; // Incrementa el retraso exponencialmente
+      } else {
+        console.error(`Error in retryOnFail: ${result.error}`);
+        if (i === maxRetries - 1) throw new Error(result.error);
+        await new Promise((res) => setTimeout(res, delay));
+      }
+    }
+  };
+  const roundToTwoDecimal = (num) => {
+    return Math.round((num + Number.EPSILON) * 100) / 100;
+  };
+
+// Ruta del archivo JSON
+const counterFilePath = path.join(__dirname, '../data/callCounter.json');
+
+// Leer el archivo JSON con manejo de archivo vacío
+const readCallCounter = () => {
+  try {
+    const data = fs.readFileSync(counterFilePath, 'utf-8');
+    
+    // Si el archivo está vacío, retorna un array vacío
+    if (!data || data.trim() === '') {
+      console.log("Archivo JSON vacío, inicializando...");
+      return [];
+    }
+
+    return JSON.parse(data); // Intenta parsear el contenido del archivo
+  } catch (error) {
+    console.error('Error al leer el contador de llamadas o archivo malformado:', error);
+    return []; // Retorna un array vacío si el archivo no existe o está malformado
+  }
+};
+
+// Escribir el archivo JSON
+const writeCallCounter = (counterData) => {
+  try {
+    fs.writeFileSync(counterFilePath, JSON.stringify(counterData, null, 2));
+  } catch (error) {
+    console.error('Error al escribir el contador de llamadas:', error);
+  }
+};
+
+// Actualizar el contador
+const updateCallCounter = () => {
+  const currentDate = moment().format('YYYY-MM-DD');
+  let counterData = readCallCounter();
+  
+  // Verifica si ya hay un registro para el día actual
+  const todayEntry = counterData.find(entry => entry.day === currentDate);
+  
+  if (todayEntry) {
+    // Incrementa el contador si ya existe una entrada para hoy
+    todayEntry.count += 1;
+  } else {
+    // Crea una nueva entrada para hoy si no existe
+    counterData.push({
+      day: currentDate,
+      count: 1
+    });
+  }
+
+  // Escribe los datos actualizados en el archivo JSON
+  writeCallCounter(counterData);
+};
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+module.exports = {
+    isValidUPC,
+    chunkArray,
+    formatCurrency,
+    retryOnFail,
+    roundToTwoDecimal,
+    updateCallCounter,
+    delay
+};// ./models/asinCatalogMapping.js
+const db = require("../config/mongoDbConfig");
+const { Schema } = require("mongoose");
+
+const asinCatalogSchema = new Schema(
+  {
+    asin: { type: String, unique: true },
+    amazonPrice: { type: Number, default: 0 },
+    amazonPriceUpdatedAt: { type: Date, default: null },
+    gtin: { type: String, default: null },
+    mlCatalogId: { type: String, default: null },
+    mlCategoryId: { type: String, default: null },
+    itemIds: [{ type: String, default: [] }],
+    identifiers: [{ type: String, default: null }],  // Array de identificadores (GTIN, EAN, UPC)
+    image: { type: String, default: null },
+    catalogIdentifier: { type: String, default: null },  // Identificador que coincide con el catálogo en MercadoLibre
+    averagePriceLast30Days: { type: Number, default: 0 },
+    averagePriceLast90Days: { type: Number, default: 0 },
+    averagePriceLast180Days: { type: Number, default: 0 },
+    priceHistory: [
+      {
+        price: Number,
+        date: { type: Date, default: Date.now },
+      },
+    ],
+    title: { type: String, default: null },
+    firstListingPrice: { type: Number, default: 0 },
+    firstListingPriceUpdatedAt: { type: Date, default: null },  
+    totalVisitsLast30Days: { type: Number, default: 0 },
+    totalVisitsLast30DaysUpdatedAt: { type: Date, default: null },  
+    mlCatalogIdUpdatedAt: { type: Date, default: null },  
+    mlSaleCommission: { type: Number, default: 0 },
+    mlShippingCost: { type: Number, default: 0 },
+    mlShippingCostsUpdatedAt: { type: Date, default: null },  
+    estimatedProfit: { type: Number, default: 0 },
+    isMatchCorrect: { type: Boolean, default: true },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+const AsinCatalogMapping = db.model("AsinCatalogMapping", asinCatalogSchema);
+
+module.exports = AsinCatalogMapping;// ./models/meliCredentials.js
+const db = require('../config/mongoDbConfig');
+const { Schema } = require('mongoose');
+
+const melicrentialsSchema = new Schema({
+    access_token: String,
+    token_type: String,
+    expires_in: Number,
+    user_id:Number,
+    refresh_token: String,
+    last_update: Date,
+},
+ {
+    collection: 'melicrentials'
+}
+
+);
+module.exports = db.model('melicrentials', melicrentialsSchema );// ./controllers/catalogController.js
 const Bluebird = require("bluebird");
 const moment = require("moment");
 const {
@@ -77,52 +509,6 @@ class AsinCatalogProcessor {
       }
     } catch (error) {
       console.error("Error en addNewAsins:", error);
-    }
-  }
-
-  async addNewAsinsFromSheet() {
-    try {
-      const spreadsheetId = "1F8v5JpQ-pXJ7-XyHcbHpI0whCtMo3sJSLbc95ebRoKA";
-      const range = "NewAsins!A2:A";
-
-      // Leer los ASINs de la hoja de cálculo
-      const asinsFromSheet = await readSheet(spreadsheetId, range);
-      
-      if (!asinsFromSheet || asinsFromSheet.length === 0) {
-        console.log("No se encontraron ASINs en la hoja de cálculo.");
-        return;
-      }
-
-      // Aplanar el array y filtrar valores vacíos
-      const allAsins = asinsFromSheet.flat().filter(asin => asin);
-
-      console.log(`Se encontraron ${allAsins.length} ASINs en la hoja de cálculo.`);
-
-      // Obtener los ASINs existentes y usar un Set para eficiencia
-      const existingAsinsArray = await AsinCatalogMapping.find().distinct("asin");
-      const existingAsins = new Set(existingAsinsArray);
-
-      // Filtrar los nuevos ASINs que no están en la base de datos
-      const newAsins = allAsins.filter((asin) => !existingAsins.has(asin));
-      console.log(`Se encontraron ${newAsins.length} ASINs nuevos.`);
-
-      if (newAsins.length > 0) {
-        // Convertir cada ASIN en un objeto según el esquema de AsinCatalogMapping
-        const newAsinsObjects = newAsins.map((asin) => ({ asin }));
-
-        await AsinCatalogMapping.insertMany(newAsinsObjects);
-        console.log(
-          `Se agregaron ${newAsins.length} nuevos ASINs a la base de datos.`
-        );
-
-        // Limpiar los ASINs agregados de la hoja de cálculo
-        await clearSheet(spreadsheetId, range);
-        console.log("Se limpiaron los ASINs agregados de la hoja de cálculo.");
-      } else {
-        console.log("No hay nuevos ASINs para agregar.");
-      }
-    } catch (error) {
-      console.error("Error en addNewAsinsFromSheet:", error);
     }
   }
 
@@ -254,7 +640,6 @@ class AsinCatalogProcessor {
       mlCatalogId: { $nin: [null, "no_catalog"] },
       isMatchCorrect: { $ne: false },
       $or: [
-        {tracking:true},
         { firstListingPriceUpdatedAt: { $exists: false } },
         { firstListingPriceUpdatedAt: null },
         {
@@ -632,7 +1017,6 @@ class AsinCatalogProcessor {
         totalVisitsLast30Days: { $gte: 600 },
         isMatchCorrect: { $ne: false },
         $or: [
-          {tracking:true},
           { amazonPriceUpdatedAt: { $lte: twentyFourHoursAgo } },
           { amazonPriceUpdatedAt: null },
           { amazonPriceUpdatedAt: { $exists: false } },
@@ -641,15 +1025,6 @@ class AsinCatalogProcessor {
       this.processAmazonPriceUpdate.bind(this)
     );
     console.log("Actualización de precios de Amazon completada.");
-  }
-  async updateAmazonPriceTracked() {
-    await this.processMappingsInBatch(
-      {
-        tracking: true,
-      },
-      this.processAmazonPriceUpdate.bind(this)
-    );
-    console.log("Actualización de precios de Amazon completada para ASINs con tracking.");
   }
 
   async processAmazonPriceUpdate(mapping) {
@@ -923,64 +1298,192 @@ class AsinCatalogProcessor {
       proceed = mappings.length === batchSize;
     }
   }
-
-  async updateTrackingFromSheet() {
-    try {
-      const spreadsheetId = "1PKFCSNVsRR8wM6mOeckoJUYGqKrZ9oWrbvSf_7FHLD8";
-      const range = "Lista!D2:D";
-
-      // Leer los ASINs de la hoja de cálculo
-      const asinsFromSheet = await readSheet(spreadsheetId, range);
-      
-      // Aplanar el array y filtrar valores vacíos
-      const asinsToTrack = asinsFromSheet ? asinsFromSheet.flat().filter(asin => asin) : [];
-
-      console.log(`Se encontraron ${asinsToTrack.length} ASINs en la hoja de cálculo.`);
-
-      // Obtener todos los ASINs con su estado de tracking actual
-      const currentTracking = await AsinCatalogMapping.find({}, { asin: 1, tracking: 1 }).lean();
-      
-      const currentTrackingMap = new Map(currentTracking.map(item => [item.asin, item.tracking]));
-
-      const asinsToUpdate = [];
-      const asinsToUntrack = [];
-
-      asinsToTrack.forEach(asin => {
-        if (!currentTrackingMap.has(asin) || currentTrackingMap.get(asin) !== true) {
-          asinsToUpdate.push(asin);
-        }
-      });
-
-      currentTrackingMap.forEach((tracking, asin) => {
-        if (tracking === true && !asinsToTrack.includes(asin)) {
-          asinsToUntrack.push(asin);
-        }
-      });
-
-      // Actualizar a true los ASINs que lo necesitan
-      if (asinsToUpdate.length > 0) {
-        const updateResultTrue = await AsinCatalogMapping.updateMany(
-          { asin: { $in: asinsToUpdate } },
-          { $set: { tracking: true } }
-        );
-        console.log(`Se actualizaron ${updateResultTrue.modifiedCount} documentos a tracking true.`);
-      }
-
-      // Actualizar a false los ASINs que ya no están en la lista
-      if (asinsToUntrack.length > 0) {
-        const updateResultFalse = await AsinCatalogMapping.updateMany(
-          { asin: { $in: asinsToUntrack } },
-          { $set: { tracking: false } }
-        );
-        console.log(`Se actualizaron ${updateResultFalse.modifiedCount} documentos a tracking false.`);
-      }
-
-      console.log(`Total de ASINs procesados: ${asinsToUpdate.length + asinsToUntrack.length}`);
-
-    } catch (error) {
-      console.error("Error en updateTrackingFromSheet:", error);
-    }
-  }
 }
 
 module.exports = new AsinCatalogProcessor();
+
+// ./controllers/arbitrageController.js
+const asinCatalogProcessor = require("./catalogController");
+
+const arbitrageAmazonMeli = async () => {
+  try {
+    console.log('Iniciando proceso de arbitraje Amazon-MercadoLibre...');
+
+    console.log('Agregando nuevos ASINs...');
+    await asinCatalogProcessor.addNewAsins();
+
+    console.log('Agregando detalles de cada ASIN nuevo...');
+    await asinCatalogProcessor.addAsinDetails();
+
+    console.log('Agregando los CatalogId de los nuevos productos...');
+    await asinCatalogProcessor.addCatalogIds();
+
+    console.log('Actualizando los precios de referencia de los productos en el catálogo de MercadoLibre...');
+    await asinCatalogProcessor.updateCatalogPrices();
+
+    console.log('Agregando los CategoryId de los productos...');
+    await asinCatalogProcessor.addCategoryId();
+
+    console.log('Actualizando las comisiones de MercadoLibre para los nuevos productos...');
+    await asinCatalogProcessor.addFee();
+
+    console.log('Actualizando los costos de envíos de MercadoLibre para los nuevos productos...');
+    await asinCatalogProcessor.updateShippingCostsDaily();
+
+    console.log('Actualizando el total de visitas de los productos en los últimos 30 días...');
+    await asinCatalogProcessor.updateTotalVisitsLast30Days();
+
+    console.log('Actualizando los precios de Amazon para todos los productos con CatalogId...');
+    await asinCatalogProcessor.updateAmazonPrice();
+
+    console.log('Calculando la ganancia potencial de los productos...');
+    await asinCatalogProcessor.calculateProfit();
+
+    console.log('Subiendo los datos al Google Sheet...');
+    await asinCatalogProcessor.uploadDataToSheet();
+
+    console.log('Proceso de arbitraje finalizado.');
+    process.exit(0); // Terminar el proceso de arbitraje cuando se hayan realizado todas las operaciones
+
+  } catch (error) {
+    console.error('Error en el proceso de arbitraje:', error);
+    process.exit(1); // Terminar el proceso de arbitraje si hay un error
+  }
+};
+
+arbitrageAmazonMeli();// ./services/amazonService.js
+
+const spClient = require("../config/amazonConfig");
+
+const getAsinPrice = async (asin) => {
+// Pendiente incluir promociones
+// Planea y Ahorra
+// Súper 5% extra
+// Súper ahorra 5%
+
+  try {
+    const params = {
+      endpoint: "productPricing",
+      operation: "getItemOffers",
+      query: {
+        MarketplaceId: "A1AM78C64UM0Y8",
+        ItemCondition: "New",
+        CustomerType: "Business",
+      },
+      path: {
+        Asin: asin,
+      },
+    };
+
+    const results = await spClient.callAPI(params);
+   // console.log(JSON.stringify(results, null, 2));
+    return results;
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+const getAsinDetails = async (asin) => {
+  try {
+    const params = {
+      method: "GET",
+      api_path: "/catalog/2022-04-01/items",
+      query: {
+        marketplaceIds: "A1AM78C64UM0Y8",
+        includedData: ["identifiers", "attributes", "images"],
+        identifiersType: ["ASIN"],
+        identifiers: [asin],
+      },
+    };
+
+    const results = await spClient.callAPI(params);
+    // console.log(JSON.stringify(results, null, 2));
+    if (results.numberOfResults > 0 && results.items.length > 0) {
+      const item = results.items[0];
+
+      // Extract unique identifiers
+      const identifiers = item.identifiers.flatMap((marketplace) =>
+        marketplace.identifiers
+          .filter((identifier) =>
+            ["GTIN", "EAN", "UPC"].includes(identifier.identifierType)
+          )
+          .map((identifier) => identifier.identifier)
+      );
+      const uniqueIdentifiers = [...new Set(identifiers)];
+
+      // Get title
+      const title =
+        item.attributes?.item_name?.find(
+          (name) => name.language_tag === "es_MX"
+        )?.value || "Sin título";
+
+      // Get image
+      const image = item.images?.[0]?.images?.[0]?.link || null;
+      //  console.log(JSON.stringify({ uniqueIdentifiers, title, image }, null, 2));
+      return { uniqueIdentifiers, title, image };
+    } else {
+      console.log("No se encontraron detalles para el ASIN proporcionado.");
+      return { uniqueIdentifiers: [], title: "Sin título", image: null };
+    }
+  } catch (error) {
+    console.error("Error al obtener los detalles por ASIN:", error);
+    return { uniqueIdentifiers: [], title: "Sin título", image: null };
+  }
+};
+
+
+
+
+
+
+module.exports = {
+  getAsinPrice,
+  getAsinDetails,
+};
+// ./services/keepaService.js
+const { callKeepaAPI } = require('../config/keepaConfig');
+
+
+
+//Busqueda de productos vendidos por amazon en la categoria de belleza
+const findProductsFromKeepa = async (category) => {
+  const productSearchParams = {
+    domain: 11,
+    selection: JSON.stringify({
+      current_AMAZON_gte: 15000,
+      current_AMAZON_lte: 400000,
+      rootCategory: category,
+     sort: [["current_SALES", "asc"]], // Ordenar por ventas actuales
+    // sort: [[ "deltaPercent30_AMAZON", "desc"]], // Ordenar por variación de precio en los últimos 30 días
+    // sort: [[ "deltaPercent90_AMAZON", "desc"]], // Ordenar por variación de precio en los últimos 30 días
+    //  sort: [[ "current_AMAZON", "asc"]], // Ordenar precio actual de menor a mayor
+    //  sort: [[ "current_AMAZON", "desc"]], // Ordenar precio actual de mayor a menor
+      productType: [0, 1, 2],
+      page: 0,
+      perPage: 10000
+    }),
+  };
+
+  const data = await callKeepaAPI("/query", productSearchParams);
+  console.log(JSON.stringify(data.asinList, null, 2));
+  return data.asinList;
+};
+
+
+const getTokenLeft = async () => {
+  try {
+      const endpoint = '/token';
+      const response = await callKeepaAPI(endpoint);
+      return response.tokensLeft; // Retorna directamente los datos de la respuesta
+  } catch (error) {
+      console.error('Error al obtener los tokens restantes:', error);
+      throw error;
+  }
+}
+
+
+  //getSellerId("A2RIC6EIHFYJ8E")
+module.exports = {
+    findProductsFromKeepa,
+    getTokenLeft
+}

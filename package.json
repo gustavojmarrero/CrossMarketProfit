@@ -6,6 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "addNewAsins": "node -e \"(async () => { try { await require('./controllers/catalogController.js').addNewAsins(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
+    "addNewAsinsFromSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').addNewAsinsFromSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "addAsinDetails": "node -e \"(async () => { try { await require('./controllers/catalogController.js').addAsinDetails(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "addCatalogIds": "node -e \"(async () => { try { await require('./controllers/catalogController.js').addCatalogIds(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "updateCatalogPrices": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateCatalogPrices(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
@@ -13,10 +14,12 @@
     "addFee": "node -e \"(async () => { try { await require('./controllers/catalogController.js').addFee(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "updateShippingCostsDaily": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateShippingCostsDaily(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "updateTotalVisitsLast30Days": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateTotalVisitsLast30Days(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
-    "updateAmazonPrice": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateAmazonPrice(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
+    "updateAmazonPrice": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateAmazonPriceTracked(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
+    "updateAmazonPriceTracked": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateAmazonPrice(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "calculateProfit": "node -e \"(async () => { try { await require('./controllers/catalogController.js').calculateProfit(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "uploadDataToSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').uploadDataToSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
-    "updateIsMatchCorrectFromSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateIsMatchCorrectFromSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\""
+    "updateIsMatchCorrectFromSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateIsMatchCorrectFromSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
+     "updateTrackingFromSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateTrackingFromSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\""
   },
   "keywords": [],
   "author": "",

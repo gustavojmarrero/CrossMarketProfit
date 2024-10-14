@@ -1,3 +1,4 @@
+// ./config/meliConfig.js
 const axios = require("axios").default;
 const setupQueue = require('./setupQueque'); // Importa la función que configura la cola
 const credentials = require('../models/meliCredentials');

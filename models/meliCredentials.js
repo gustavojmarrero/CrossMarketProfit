@@ -1,3 +1,4 @@
+// ./models/meliCredentials.js
 const db = require('../config/mongoDbConfig');
 const { Schema } = require('mongoose');
 
