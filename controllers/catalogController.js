@@ -631,8 +631,8 @@ class AsinCatalogProcessor {
         asin: { $ne: null },
         totalVisitsLast30Days: { $gte: 600 },
         isMatchCorrect: { $ne: false },
+        tracking: false,
         $or: [
-          {tracking:true},
           { amazonPriceUpdatedAt: { $lte: twentyFourHoursAgo } },
           { amazonPriceUpdatedAt: null },
           { amazonPriceUpdatedAt: { $exists: false } },

@@ -32,6 +32,9 @@ const arbitrageAmazonMeli = async () => {
     console.log('Actualizando los precios de Amazon para todos los productos con CatalogId...');
     await asinCatalogProcessor.updateAmazonPrice();
 
+    console.log("Actualizando los precios de Amazon para todos los productos del tracking")
+    await asinCatalogProcessor.updateAmazonPriceTracked();
+    
     console.log('Calculando la ganancia potencial de los productos...');
     await asinCatalogProcessor.calculateProfit();
 
