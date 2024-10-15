@@ -813,8 +813,11 @@ class AsinCatalogProcessor {
       amazonPrice: { $gt: 0 },
       estimatedProfit: { $gt: 70 },
       totalVisitsLast30Days: { $gte: 600 },
-      tracking:false
-    }).sort({ totalVisitsLast30Days: -1 });
+      $or: [
+        { tracking: false },
+        { tracking: { $exists: false } }
+      ]
+    }).sort({ estimatedProfit: -1 });
 
     const values = mappings.map((mapping) => [
       `=HYPERLINK("https://www.amazon.com.mx/dp/${mapping.asin}?th=1&psc=1", "${mapping.asin}")`,
