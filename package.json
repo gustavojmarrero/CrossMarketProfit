@@ -17,9 +17,11 @@
     "updateAmazonPrice": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateAmazonPrice(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "updateAmazonPriceTracked": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateAmazonPriceTracked(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "calculateProfit": "node -e \"(async () => { try { await require('./controllers/catalogController.js').calculateProfit(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
+    "calculateTrackingProfit": "node -e \"(async () => { try { await require('./controllers/catalogController.js').calculateTrackingProfit(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "uploadDataToSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').uploadDataToSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
     "updateIsMatchCorrectFromSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateIsMatchCorrectFromSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
-     "updateTrackingFromSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateTrackingFromSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\""
+    "updateTrackingFromSheet": "node -e \"(async () => { try { await require('./controllers/catalogController.js').updateTrackingFromSheet(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\"",
+    "triggerGoogleScriptUpdate": "node -e \"(async () => { try { await require('./controllers/catalogController.js').triggerGoogleScriptUpdate(); process.exit(0); } catch (error) { console.error(error); process.exit(1); } })();\""
   },
   "keywords": [],
   "author": "",

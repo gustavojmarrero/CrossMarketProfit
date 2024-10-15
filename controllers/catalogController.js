@@ -17,6 +17,7 @@ const {
 } = require("../services/keepaService");
 const AsinCatalogMapping = require("../models/asinCatalogMapping");
 const { delay } = require("../utils");
+const axios = require('axios');
 
 class AsinCatalogProcessor {
   constructor() {
@@ -766,7 +767,16 @@ class AsinCatalogProcessor {
 
     console.log("Actualización de ganancias estimadas completada.");
   }
+  async calculateTrackingProfit() {
+    await this.processMappingsInBatch(
+      {
+      tracking:true
+      },
+      this.processProfitCalculation.bind(this)
+    );
 
+    console.log("Actualización de ganancias estimadas completada.");
+  }
   async processProfitCalculation(mapping) {
     let estimatedProfit;
 
@@ -803,6 +813,7 @@ class AsinCatalogProcessor {
       amazonPrice: { $gt: 0 },
       estimatedProfit: { $gt: 70 },
       totalVisitsLast30Days: { $gte: 600 },
+      tracking:false
     }).sort({ totalVisitsLast30Days: -1 });
 
     const values = mappings.map((mapping) => [
@@ -979,6 +990,18 @@ class AsinCatalogProcessor {
 
     } catch (error) {
       console.error("Error en updateTrackingFromSheet:", error);
+    }
+  }
+
+  async triggerGoogleScriptUpdate() {
+    const url = 'https://script.google.com/macros/s/AKfycbwE-weaNxzB8oKFDHoXAUEY-rEhAofpD400eGixM33lid2RgkU9EJcb9VON5d1CGMBv/exec';
+
+    try {
+      const response = await axios.post(url);
+      console.log('Google Script update triggered successfully');
+      console.log('Response:', response.data);
+    } catch (error) {
+      console.error('Error triggering Google Script update:', error.message);
     }
   }
 }
