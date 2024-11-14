@@ -840,7 +840,7 @@ class AsinCatalogProcessor {
       mapping.estimatedProfit,
       mapping.priceHistory.length,
     ]);
-
+    console.log(values)
     await clearSheet(spreadsheetId, `${range}!A2:N`);
     await updateSheet(spreadsheetId, `${range}!A2:N`, values);
 
